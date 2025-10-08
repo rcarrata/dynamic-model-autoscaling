@@ -1,0 +1,42 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: {{ include "granite-3-3-8b.fullname" . }}
+  labels:
+    {{- include "granite-3-3-8b.labels" . | nindent 4 }}
+    opendatahub.io/dashboard: 'true'
+  annotations:
+    openshift.io/display-name: {{ .Values.inferenceService.displayName | default "granite-3.3-8b" }}
+    serving.knative.openshift.io/enablePassthrough: 'true'
+    {{- if .Values.keda.enabled }}
+    serving.kserve.io/autoscalerClass: external
+    {{- end }}
+    sidecar.istio.io/inject: 'true'
+    sidecar.istio.io/rewriteAppHTTPProbers: 'true'
+    serving.kserve.io/deploymentMode: {{ .Values.inferenceService.deploymentMode | default "RawDeployment" }}
+  finalizers:
+    - serving.kserve.io/inferenceservice-finalizer
+spec:
+  predictor:
+    automountServiceAccountToken: {{ .Values.inferenceService.automountServiceAccountToken | default false }}
+    deploymentStrategy:
+      type: RollingUpdate
+    maxReplicas: {{ .Values.inferenceService.maxReplicas | default 1 }}
+    minReplicas: {{ .Values.inferenceService.minReplicas | default 1 }}
+    model:
+      args:
+        - '--served-model-name={{ .Values.servingRuntime.servedModelName | default "granite-8b" }}'
+        {{- if .Values.model.disableLogRequests }}
+        - '--disable-log-requests'
+        {{- end }}
+        - '--max-num-seqs={{ .Values.model.maxNumSeqs | default 32 }}'
+        - '--max-model-len={{ .Values.model.maxModelLen | default 2048 }}'
+      modelFormat:
+        name: {{ .Values.inferenceService.modelFormat | default "vLLM" }}
+      name: {{ .Values.inferenceService.modelName | default "" }}
+      resources:
+        {{- toYaml .Values.resources | nindent 8 }}
+      runtime: {{ .Values.inferenceService.runtime | default (include "granite-3-3-8b.fullname" .) }}
+      storageUri: {{ .Values.inferenceService.storageUri | default "oci://quay.io/redhat-ai-services/modelcar-catalog:granite-3.3-8b-instruct" }}
+    tolerations:
+      {{- toYaml .Values.tolerations | nindent 6 }}
